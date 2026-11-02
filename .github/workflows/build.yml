@@ -1,6 +1,6 @@
 name: Build FMTV APK
 on:
-  workflow_dispatch: # 只手动打包，不自动触发
+  workflow_dispatch: # 只手动点击打包，push不自动跑
 
 jobs:
   build:
@@ -18,24 +18,29 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Set Android SDK env & local.properties
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Generate full local.properties（补齐签名占位，解决null报错）
         run: |
-          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+          cat > local.properties <<EOF
+sdk.dir=$ANDROID_HOME
+storeFile=
+storePassword=
+keyAlias=
+keyPassword=
+EOF
           cat local.properties
-          # 配置东软镜像，替换google源
-          mkdir -p ~/.android
-          echo 'sdk.manager.https.proxyPort=80' > ~/.android/sdkmanager.conf
-          echo 'sdk.manager.https.proxyHost=mirrors.neusoft.edu.cn' >> ~/.android/sdkmanager.conf
 
       - name: Accept SDK licenses
-        run: |
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
-          # 预安装基础编译套件
-          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platforms;android-33" "build-tools;33.0.2"
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
 
-      - name: Grant execute permission
+      - name: Grant execute permission for gradlew
         run: chmod +x gradlew
+
+      - name: 替换gradle为阿里云镜像（国内加速）
+        run: |
+          sed -i 's|https://services.gradle.org/distributions|https://mirrors.aliyun.com/maven/gradle|g' gradle/wrapper/gradle-wrapper.properties
 
       - name: Build with Gradle
         run: ./gradlew clean assembleRelease
