@@ -20,7 +20,8 @@ public class HeaderPresenter extends Presenter {
     @Override
     public void onBindViewHolder(@NonNull Presenter.ViewHolder viewHolder, Object object) {
         HeaderPresenter.ViewHolder holder = (HeaderPresenter.ViewHolder) viewHolder;
-        holder.binding.text.setText(object instanceof String ? object.toString() : ResUtil.getString((int) object));
+        // 强制固定文字，忽略上层传进来的值，永远显示 TVBOX
+        holder.binding.text.setText("TVBOX");
     }
 
     @Override
