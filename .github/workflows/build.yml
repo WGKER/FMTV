@@ -1,9 +1,6 @@
 name: Build FMTV APK
-
 on:
-  push:
-    branches: fongmi   # 改成你自己的分支名
-  workflow_dispatch:      # 支持手动点按钮运行
+  workflow_dispatch:
 
 jobs:
   build:
@@ -21,58 +18,34 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Generate local.properties
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          cat local.properties
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build release APKs
-        run: ./gradlew clean assembleRelease --no-daemon
+      - name: Build with Gradle
+        run: ./gradlew clean assembleRelease
 
-      - name: Generate keystore (自动签名密钥)
+      - name: Rename APK
         run: |
-          keytool -genkeypair -v \
-            -keystore release.keystore \
-            -alias fmkey \
-            -keyalg RSA -keysize 2048 \
-            -validity 36500 \
-            -storepass tvbox123 \
-            -keypass tvbox123 \
-            -dname "CN=TVBOX, OU=Dev, O=Personal, L=CN, ST=CN, C=CN"
+          mv app/build/outputs/apk/leanback/release/app-leanback-arm64-v8a-release.apk app/build/outputs/apk/leanback/release/leanback-arm64_v8a.apk
+          mv app/build/outputs/apk/leanback/release/app-leanback-armeabi-v7a-release.apk app/build/outputs/apk/leanback/release/leanback-armeabi_v7a.apk
+          mv app/build/outputs/apk/mobile/release/app-mobile-arm64-v8a-release.apk app/build/outputs/apk/mobile/release/mobile-arm64_v8a.apk
+          mv app/build/outputs/apk/mobile/release/app-mobile-armeabi-v7a-release.apk app/build/outputs/apk/mobile/release/mobile-armeabi_v7a.apk
 
-      - name: Zipalign & Sign all APKs
-        run: |
-          BT=$ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | sort -V | tail -1)
-          echo "Build tools: $BT"
-          mkdir -p out
-
-          # 找到所有 release 下的 apk（含 unsigned）
-          find app/build/outputs/apk -name "*.apk" ! -name "*aligned*" | while read apk; do
-            name=$(basename "$apk" .apk)
-            # 去掉文件名里的 -unsigned 后缀，避免重复
-            clean_name=$(echo "$name" | sed 's/-unsigned$//')
-
-            echo ">>> Processing: $apk -> out/${clean_name}.apk"
-
-            # 1) zipalign 对齐
-            "$BT/zipalign" -f -p 4 "$apk" "out/${clean_name}-aligned.apk"
-
-            # 2) apksigner 签名
-            "$BT/apksigner" sign \
-              --ks release.keystore \
-              --ks-key-alias fmkey \
-              --ks-pass pass:tvbox123 \
-              --key-pass pass:tvbox123 \
-              --out "out/${clean_name}.apk" \
-              "out/${clean_name}-aligned.apk"
-
-            rm -f "out/${clean_name}-aligned.apk"
-          done
-
-          echo "===== 签名后产物 ====="
-          ls -lh out/
-
-      - name: Upload APK artifacts
+      - name: Upload signed APKs
         uses: actions/upload-artifact@v4
         with:
-          name: FMTV-Signed-APKs
-          path: out/*.apk
+          name: FMTV-APKs
+          path: |
+            app/build/outputs/apk/leanback/release/leanback-arm64_v8a.apk
+            app/build/outputs/apk/leanback/release/leanback-armeabi_v7a.apk
+            app/build/outputs/apk/mobile/release/mobile-arm64_v8a.apk
+            app/build/outputs/apk/mobile/release/mobile-armeabi_v7a.apk
           retention-days: 90
