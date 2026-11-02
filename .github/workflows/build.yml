@@ -1,0 +1,79 @@
+name: Build FMTV APK
+
+on:
+  push:
+    branches: [ main ]   # 改成你自己的分支名
+  workflow_dispatch:      # 支持手动点按钮运行
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build release APKs
+        run: ./gradlew clean assembleRelease --no-daemon
+
+      - name: Generate keystore (自动签名密钥)
+        run: |
+          keytool -genkeypair -v \
+            -keystore release.keystore \
+            -alias fmkey \
+            -keyalg RSA -keysize 2048 \
+            -validity 36500 \
+            -storepass tvbox123 \
+            -keypass tvbox123 \
+            -dname "CN=TVBOX, OU=Dev, O=Personal, L=CN, ST=CN, C=CN"
+
+      - name: Zipalign & Sign all APKs
+        run: |
+          BT=$ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | sort -V | tail -1)
+          echo "Build tools: $BT"
+          mkdir -p out
+
+          # 找到所有 release 下的 apk（含 unsigned）
+          find app/build/outputs/apk -name "*.apk" ! -name "*aligned*" | while read apk; do
+            name=$(basename "$apk" .apk)
+            # 去掉文件名里的 -unsigned 后缀，避免重复
+            clean_name=$(echo "$name" | sed 's/-unsigned$//')
+
+            echo ">>> Processing: $apk -> out/${clean_name}.apk"
+
+            # 1) zipalign 对齐
+            "$BT/zipalign" -f -p 4 "$apk" "out/${clean_name}-aligned.apk"
+
+            # 2) apksigner 签名
+            "$BT/apksigner" sign \
+              --ks release.keystore \
+              --ks-key-alias fmkey \
+              --ks-pass pass:tvbox123 \
+              --key-pass pass:tvbox123 \
+              --out "out/${clean_name}.apk" \
+              "out/${clean_name}-aligned.apk"
+
+            rm -f "out/${clean_name}-aligned.apk"
+          done
+
+          echo "===== 签名后产物 ====="
+          ls -lh out/
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: FMTV-Signed-APKs
+          path: out/*.apk
+          retention-days: 30
+#（注：内容由AI生成）
