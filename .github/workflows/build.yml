@@ -2,7 +2,7 @@ name: Build FMTV APK
 
 on:
   push:
-    branches: [ main ]   # 改成你自己的分支名
+    branches: fongmi   # 改成你自己的分支名
   workflow_dispatch:      # 支持手动点按钮运行
 
 jobs:
@@ -75,5 +75,4 @@ jobs:
         with:
           name: FMTV-Signed-APKs
           path: out/*.apk
-          retention-days: 30
-#（注：内容由AI生成）
+          retention-days: 90
